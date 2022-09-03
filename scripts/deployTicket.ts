@@ -14,8 +14,8 @@ async function main() {
   const address = tronWeb.address.fromPrivateKey(privateKey)
 
   const params = [
-    // { type: 'string', value: 'Ticket'},
-    // { type: 'string', value: 'TCT'},
+    { type: 'string', value: 'Ticket'},
+    { type: 'string', value: 'TCT'},
     { type: 'uint256', value: 10000000},
   ]
 
