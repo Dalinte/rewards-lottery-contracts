@@ -3,12 +3,13 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-// import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract Ticket is ERC20  {
-     constructor() ERC20('Ticket', 'TCT') {
-        _mint(msg.sender, 10000000);
+contract Ticket is ERC20, Ownable  {
+constructor(address a, uint256 _initSupple) ERC20('Ticket', 'TCT') {
+        _mint(msg.sender, _initSupple);
     }
+
     // constructor(string memory _name, string memory _symbol, uint256 _initSupple) ERC20(_name, _symbol) Ownable() {
     //     _mint(msg.sender, _initSupple);
     // }
