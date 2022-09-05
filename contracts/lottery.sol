@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 contract Lottery is Ownable {
   IERC20 ticketToken;
   IERC20 rewardToken;
-  uint256 public lotteryDuration;
+  uint256 public endTime;
   uint public totalTicket;
 
   enum LotteryStatuses {
@@ -37,10 +37,11 @@ contract Lottery is Ownable {
     lotteryStatus = LotteryStatuses.started;
     ticketToken = IERC20(_ticketAddress);
     rewardToken = IERC20(_rewardTokenAddress);
-    lotteryDuration = _lotteryDuration;
+    endTime = now + _lotteryDuration;
   }
 
   function completeLottery () external onlyOwner {
+    require(endTime <= now, "The time is not up yet");
     require(lotteryStatus != LotteryStatuses.completed, "Lottery already complete");
 
     _generateWinners();
@@ -52,6 +53,7 @@ contract Lottery is Ownable {
   }
 
   function playTheLottery (uint256 _amount) public {
+    require(endTime > now, "Time's up");
     require(_amount > 0, "You need to send more than 0 ticket");
     uint256 allowance = ticketToken.allowance(_msgSender(), address(this));
     require(allowance >= _amount, "Check the token allowance");
