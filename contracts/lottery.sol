@@ -9,6 +9,7 @@ contract Lottery is Ownable {
   IERC20 ticketToken;
   IERC20 rewardToken;
   uint256 public lotteryDuration;
+  uint public totalTicket;
 
   enum LotteryStatuses {
     notStarted,
@@ -19,7 +20,7 @@ contract Lottery is Ownable {
   LotteryStatuses public lotteryStatus = LotteryStatuses.notStarted;
 
   mapping (address => uint256) public userTickets;
-  mapping (uint256 => address) public uniqueUser;
+  address[] public userList;
 
   struct Winner {
     address userAddress;
@@ -30,6 +31,7 @@ contract Lottery is Ownable {
   uint256 winnersCount = 0;
 
   event TicketSent(address ticketSender, uint256 amount);
+  event LotteryCompleted();
 
   constructor (address _ticketAddress, address _rewardTokenAddress, uint256 _lotteryDuration) Ownable() {
     lotteryStatus = LotteryStatuses.started;
@@ -45,6 +47,8 @@ contract Lottery is Ownable {
     _sendRewardsToWinners();
     
     lotteryStatus = LotteryStatuses.completed;
+
+    emit LotteryCompleted();
   }
 
   function playTheLottery (uint256 _amount) public {
@@ -52,7 +56,9 @@ contract Lottery is Ownable {
     uint256 allowance = ticketToken.allowance(_msgSender(), address(this));
     require(allowance >= _amount, "Check the token allowance");
     ticketToken.transferFrom(_msgSender(), address(this), _amount);
-    // if (userTickets[_msgSender()] > 0) userCount++;
+    if (userTickets[_msgSender()] == 0) userList.push(_msgSender());
+    userTickets[_msgSender()] +=  _amount;
+    totalTicket = _amount;
 
     emit TicketSent(_msgSender(), _amount);
   }
@@ -68,8 +74,17 @@ contract Lottery is Ownable {
   }
 
   function _generateWinners () internal {
-    // winners[0] = Winner(userTickets[0], 2);
-    // winners[1] = Winner(address(), 1);
-    // winnersCount = 2;
+    uint256 winnerNumber = getRandomNumber(0, userList.length - 1);
+    winners[0] = Winner(userList[winnerNumber], rewardTokenBalance());
+  }
+
+  function getRandomNumber (uint256 _startingValue, uint256 _endingValue) internal returns(uint256) {   
+    uint256 randomInt = uint256(keccak256(abi.encodePacked(blockhash(block.number - 1))));
+    uint256 range = _endingValue - _startingValue + 1;
+
+    randomInt = randomInt % range;
+    randomInt += _startingValue;
+
+    return randomInt;
   }
 }
