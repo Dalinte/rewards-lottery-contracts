@@ -12,12 +12,11 @@ contract Lottery is Ownable {
   uint public totalTicket;
 
   enum LotteryStatuses {
-    notStarted,
-    started,
+    inProgress,
     completed
   }
 
-  LotteryStatuses public lotteryStatus = LotteryStatuses.notStarted;
+  LotteryStatuses public lotteryStatus = LotteryStatuses.inProgress;
 
   mapping (address => uint256) public userTickets;
   address[] public userList;
@@ -28,20 +27,20 @@ contract Lottery is Ownable {
   }
 
   mapping (uint256 => Winner) public winners;
-  uint256 winnersCount = 0;
+  uint256 public winnersCount = 0;
 
   event TicketSent(address ticketSender, uint256 amount);
   event LotteryCompleted();
 
-  constructor (address _ticketAddress, address _rewardTokenAddress, uint256 _lotteryDuration) Ownable() {
-    lotteryStatus = LotteryStatuses.started;
+  constructor (address _ticketAddress, address _rewardTokenAddress, uint256 _endTime) Ownable() {
+    require(_endTime > block.timestamp, "Timestamp in the past");
     ticketToken = IERC20(_ticketAddress);
     rewardToken = IERC20(_rewardTokenAddress);
-    endTime = now + _lotteryDuration;
+    endTime = block.timestamp;    // Изменить на _endTime
   }
 
   function completeLottery () external onlyOwner {
-    require(endTime <= now, "The time is not up yet");
+    require(endTime <= block.timestamp, "The time is not up yet");
     require(lotteryStatus != LotteryStatuses.completed, "Lottery already complete");
 
     _generateWinners();
@@ -53,7 +52,7 @@ contract Lottery is Ownable {
   }
 
   function playTheLottery (uint256 _amount) public {
-    require(endTime > now, "Time's up");
+    // require(endTime > block.timestamp, "Time's up");
     require(_amount > 0, "You need to send more than 0 ticket");
     uint256 allowance = ticketToken.allowance(_msgSender(), address(this));
     require(allowance >= _amount, "Check the token allowance");
@@ -66,7 +65,9 @@ contract Lottery is Ownable {
   }
 
   function _sendRewardsToWinners () internal {
-    for (uint i = 0; i <= winnersCount; i++) {
+    rewardToken.approve(address(this), rewardTokenBalance());
+    // rewardToken.transferFrom(address(this), winners[0].userAddress, winners[0].amount);
+    for (uint i = 0; i < winnersCount; i++) {
       rewardToken.transferFrom(address(this), winners[i].userAddress, winners[i].amount);
     }
   }
@@ -76,11 +77,13 @@ contract Lottery is Ownable {
   }
 
   function _generateWinners () internal {
+    require(userList.length > 0, "There must be more than zero players");
     uint256 winnerNumber = getRandomNumber(0, userList.length - 1);
     winners[0] = Winner(userList[winnerNumber], rewardTokenBalance());
+    winnersCount = 1;
   }
 
-  function getRandomNumber (uint256 _startingValue, uint256 _endingValue) internal returns(uint256) {   
+  function getRandomNumber (uint256 _startingValue, uint256 _endingValue) internal view returns(uint256) {   
     uint256 randomInt = uint256(keccak256(abi.encodePacked(blockhash(block.number - 1))));
     uint256 range = _endingValue - _startingValue + 1;
 
