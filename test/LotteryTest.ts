@@ -1,5 +1,5 @@
 const { expect } = require("chai");
-const { ethers } = require("hardhat");
+const { ethers, network } = require("hardhat");
 const { loadFixture } = require("@nomicfoundation/hardhat-network-helpers");
 
 describe("Lottery contract", function () {
@@ -11,22 +11,24 @@ describe("Lottery contract", function () {
     const RewardToken = await ERC20.deploy('Tether', 'USDT', 10000000000)
       
     const lotteryContract = await ethers.getContractFactory("Lottery")
-    const Lottery = await lotteryContract.deploy(Ticket.address , RewardToken.address, 10000000000);
+    const Lottery = await lotteryContract.deploy(Ticket.address , RewardToken.address, 1665280365);
 
     return {
       owner, addr1, addr2, Ticket, RewardToken, Lottery
     }
   }
 
-  // it("getRandomNumber работает корректно", async function () {
-  //   const { Lottery } = await loadFixture(deployTokenFixture);
+  it("getRandomNumber работает корректно", async function () {
+    const { Lottery } = await loadFixture(deployTokenFixture);
     
-  //   expect(await Lottery.getRandomNumber(0, 1)).to.be.within(0, 1)
-  //   expect(await Lottery.getRandomNumber(0, 0)).to.equal(0)
-  //   expect(await Lottery.getRandomNumber(0, 1111)).to.be.within(0, 1111)
-  //   expect(await Lottery.getRandomNumber(10, 10)).to.equal(10)
-  //   expect(await Lottery.getRandomNumber(100, 1000)).to.be.within(100, 1000)
-  // })
+    await network.provider.send("hardhat_mine", ["0x100"])
+
+    expect(await Lottery.getRandomNumber(0, 1)).to.be.within(0, 1)
+    expect(await Lottery.getRandomNumber(0, 0)).to.equal(0)
+    expect(await Lottery.getRandomNumber(0, 1111)).to.be.within(0, 1111)
+    expect(await Lottery.getRandomNumber(10, 10)).to.equal(10)
+    expect(await Lottery.getRandomNumber(100, 1000)).to.be.within(100, 1000)
+  })
 
   it("Баланс токена-тикета при деплое весь у владельца контракта", async function () {
     const { Ticket, owner } = await loadFixture(deployTokenFixture);
@@ -58,6 +60,9 @@ describe("Lottery contract", function () {
 
     // Ожидается: Пользователь 1 записан в массив пользователей
     await expect(await Lottery.userList(0)).to.equal(addr1.address)
+
+    // Майнинг 256 блоков, чтобы функция генерации рандомного числа работала корректно
+    await network.provider.send("hardhat_mine", ["0x100"])
 
     await Lottery.completeLottery()
 

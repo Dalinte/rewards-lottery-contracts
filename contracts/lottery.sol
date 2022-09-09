@@ -4,8 +4,12 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "hardhat/console.sol";
 
 contract Lottery is Ownable {
+  using SafeMath for uint256;
+
   IERC20 ticketToken;
   IERC20 rewardToken;
   uint256 public endTime;
@@ -36,7 +40,7 @@ contract Lottery is Ownable {
     require(_endTime > block.timestamp, "Timestamp in the past");
     ticketToken = IERC20(_ticketAddress);
     rewardToken = IERC20(_rewardTokenAddress);
-    endTime = block.timestamp;    // Изменить на _endTime
+    endTime = _endTime;
   }
 
   function completeLottery () external onlyOwner {
@@ -44,6 +48,7 @@ contract Lottery is Ownable {
     require(lotteryStatus != LotteryStatuses.completed, "Lottery already complete");
 
     _generateWinners();
+    rewardToken.approve(address(this), rewardTokenBalance());
     _sendRewardsToWinners();
     
     lotteryStatus = LotteryStatuses.completed;
@@ -65,8 +70,6 @@ contract Lottery is Ownable {
   }
 
   function _sendRewardsToWinners () internal {
-    rewardToken.approve(address(this), rewardTokenBalance());
-    // rewardToken.transferFrom(address(this), winners[0].userAddress, winners[0].amount);
     for (uint i = 0; i < winnersCount; i++) {
       rewardToken.transferFrom(address(this), winners[i].userAddress, winners[i].amount);
     }
@@ -83,8 +86,9 @@ contract Lottery is Ownable {
     winnersCount = 1;
   }
 
-  function getRandomNumber (uint256 _startingValue, uint256 _endingValue) internal view returns(uint256) {   
-    uint256 randomInt = uint256(keccak256(abi.encodePacked(blockhash(block.number - 1))));
+  function getRandomNumber (uint256 _startingValue, uint256 _endingValue) public view returns(uint256) {
+    uint256 amountBLockAgo = endTime.sub(block.timestamp).div(3) % 255;
+    uint256 randomInt = uint256(keccak256(abi.encodePacked(blockhash(block.number.sub(amountBLockAgo)))));
     uint256 range = _endingValue - _startingValue + 1;
 
     randomInt = randomInt % range;
