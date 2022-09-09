@@ -5,30 +5,35 @@ const { loadFixture } = require("@nomicfoundation/hardhat-network-helpers");
 describe("Lottery contract", function () {
 
   async function deployTokenFixture() {
-    const [owner, addr1, addr2] = await ethers.getSigners();
+    const lotteryDuration = 60 * 60 // 1 час
+    const lotteryEndTime = Math.floor(Date.now() / 1000) + lotteryDuration
+    
+    const [owner, addr1, addr2] = await ethers.getSigners()
     const ERC20 = await ethers.getContractFactory("Ticket")
     const Ticket = await ERC20.deploy('Ticket', 'TCT', 10000000000)
     const RewardToken = await ERC20.deploy('Tether', 'USDT', 10000000000)
       
     const lotteryContract = await ethers.getContractFactory("Lottery")
-    const Lottery = await lotteryContract.deploy(Ticket.address , RewardToken.address, 1665280365);
+    const Lottery = await lotteryContract.deploy(Ticket.address , RewardToken.address, lotteryEndTime)
 
     return {
       owner, addr1, addr2, Ticket, RewardToken, Lottery
     }
   }
 
-  it("getRandomNumber работает корректно", async function () {
-    const { Lottery } = await loadFixture(deployTokenFixture);
-    
-    await network.provider.send("hardhat_mine", ["0x100"])
+  // Сделайте getRandomNumber public, тогда тест можно запускать
 
-    expect(await Lottery.getRandomNumber(0, 1)).to.be.within(0, 1)
-    expect(await Lottery.getRandomNumber(0, 0)).to.equal(0)
-    expect(await Lottery.getRandomNumber(0, 1111)).to.be.within(0, 1111)
-    expect(await Lottery.getRandomNumber(10, 10)).to.equal(10)
-    expect(await Lottery.getRandomNumber(100, 1000)).to.be.within(100, 1000)
-  })
+  // it("getRandomNumber работает корректно", async function () {
+  //   const { Lottery } = await loadFixture(deployTokenFixture);
+    
+  //   await network.provider.send("hardhat_mine", ["0x100"])
+
+  //   expect(await Lottery.getRandomNumber(0, 1)).to.be.within(0, 1)
+  //   expect(await Lottery.getRandomNumber(0, 0)).to.equal(0)
+  //   expect(await Lottery.getRandomNumber(0, 1111)).to.be.within(0, 1111)
+  //   expect(await Lottery.getRandomNumber(10, 10)).to.equal(10)
+  //   expect(await Lottery.getRandomNumber(100, 1000)).to.be.within(100, 1000)
+  // })
 
   it("Баланс токена-тикета при деплое весь у владельца контракта", async function () {
     const { Ticket, owner } = await loadFixture(deployTokenFixture);
@@ -61,8 +66,12 @@ describe("Lottery contract", function () {
     // Ожидается: Пользователь 1 записан в массив пользователей
     await expect(await Lottery.userList(0)).to.equal(addr1.address)
 
-    // Майнинг 256 блоков, чтобы функция генерации рандомного числа работала корректно
+    
+    const endTime = await Lottery.endTime()
+    
+    // Майнинг 256 блоков, чтобы функция генерации рандомного числа работала 
     await network.provider.send("hardhat_mine", ["0x100"])
+    await network.provider.send("evm_setNextBlockTimestamp", [+endTime])
 
     await Lottery.completeLottery()
 

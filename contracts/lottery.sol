@@ -57,7 +57,7 @@ contract Lottery is Ownable {
   }
 
   function playTheLottery (uint256 _amount) public {
-    // require(endTime > block.timestamp, "Time's up");
+    require(endTime > block.timestamp, "Time's up");
     require(_amount > 0, "You need to send more than 0 ticket");
     uint256 allowance = ticketToken.allowance(_msgSender(), address(this));
     require(allowance >= _amount, "Check the token allowance");
@@ -86,9 +86,10 @@ contract Lottery is Ownable {
     winnersCount = 1;
   }
 
-  function getRandomNumber (uint256 _startingValue, uint256 _endingValue) public view returns(uint256) {
-    uint256 amountBLockAgo = endTime.sub(block.timestamp).div(3) % 255;
-    uint256 randomInt = uint256(keccak256(abi.encodePacked(blockhash(block.number.sub(amountBLockAgo)))));
+  function getRandomNumber (uint256 _startingValue, uint256 _endingValue) internal view returns(uint256) {
+    uint256 amountBlockAgo = endTime.sub(block.timestamp).div(3);
+    uint256 safeAmountBLockAgo = amountBlockAgo % 254;
+    uint256 randomInt = uint256(keccak256(abi.encodePacked(blockhash(block.number.sub(safeAmountBLockAgo + 1)))));
     uint256 range = _endingValue - _startingValue + 1;
 
     randomInt = randomInt % range;
