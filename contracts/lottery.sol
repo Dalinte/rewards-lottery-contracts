@@ -33,6 +33,13 @@ contract Lottery is Ownable {
   mapping (uint256 => Winner) public winners;
   uint256 public winnersCount = 0;
 
+  struct WinnerProportions {
+    uint256 rewardPercent;
+    uint256 userCount;
+  }
+
+  WinnerProportions[] internal winnerProportions;
+
   event TicketSent(address ticketSender, uint256 amount);
   event LotteryCompleted();
 
@@ -41,6 +48,10 @@ contract Lottery is Ownable {
     ticketToken = IERC20(_ticketAddress);
     rewardToken = IERC20(_rewardTokenAddress);
     endTime = _endTime;
+
+    winnerProportions.push(WinnerProportions(50, 1));
+    winnerProportions.push(WinnerProportions(5, 3));
+    winnerProportions.push(WinnerProportions(1, 35));
   }
 
   function completeLottery () external onlyOwner {
