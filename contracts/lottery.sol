@@ -8,11 +8,11 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "hardhat/console.sol";
 
 contract Lottery is Ownable {
-  using SafeMath for uint256;
+  using SafeMath for uint;
 
   IERC20 ticketToken;
   IERC20 rewardToken;
-  uint256 public endTime;
+  uint public endTime;
   uint public totalTicket;
 
   enum LotteryStatuses {
@@ -22,28 +22,28 @@ contract Lottery is Ownable {
 
   LotteryStatuses public lotteryStatus = LotteryStatuses.inProgress;
 
-  mapping (address => uint256) public userTickets;
+  mapping (address => uint) public userTickets;
   address[] public userList;
 
   struct Winner {
     address userAddress;
-    uint256 amount;
+    uint amount;
   }
 
-  mapping (uint256 => Winner) public winners;
-  uint256 public winnersCount = 0;
+  mapping (uint => Winner) public winners;
+  uint public winnersCount = 0;
 
   struct WinnerProportions {
-    uint256 rewardPercent;
-    uint256 userCount;
+    uint rewardPercent;
+    uint userCount;
   }
 
   WinnerProportions[] internal winnerProportions;
 
-  event TicketSent(address ticketSender, uint256 amount);
+  event TicketSent(address ticketSender, uint amount, uint timestamp);
   event LotteryCompleted();
 
-  constructor (address _ticketAddress, address _rewardTokenAddress, uint256 _endTime) Ownable() {
+  constructor (address _ticketAddress, address _rewardTokenAddress, uint _endTime) Ownable() {
     require(_endTime > block.timestamp, "Timestamp in the past");
     ticketToken = IERC20(_ticketAddress);
     rewardToken = IERC20(_rewardTokenAddress);
@@ -67,17 +67,17 @@ contract Lottery is Ownable {
     emit LotteryCompleted();
   }
 
-  function playTheLottery (uint256 _amount) public {
+  function playTheLottery (uint _amount) public {
     require(endTime > block.timestamp, "Time's up");
     require(_amount > 0, "You need to send more than 0 ticket");
-    uint256 allowance = ticketToken.allowance(_msgSender(), address(this));
+    uint allowance = ticketToken.allowance(_msgSender(), address(this));
     require(allowance >= _amount, "Check the token allowance");
     ticketToken.transferFrom(_msgSender(), address(this), _amount);
     if (userTickets[_msgSender()] == 0) userList.push(_msgSender());
     userTickets[_msgSender()] +=  _amount;
     totalTicket = _amount;
 
-    emit TicketSent(_msgSender(), _amount);
+    emit TicketSent(_msgSender(), _amount, block.timestamp);
   }
 
   function _sendRewardsToWinners () internal {
@@ -86,26 +86,74 @@ contract Lottery is Ownable {
     }
   }
 
-  function rewardTokenBalance () public view returns(uint256) {
+  function rewardTokenBalance () public view returns(uint) {
     return rewardToken.balanceOf(address(this));
+  }
+
+   function usersCount () public view returns(uint) {
+    return userList.length;
+  }
+
+  function getUnusedRewards () public onlyOwner {
+    require(lotteryStatus == LotteryStatuses.completed, "The lottery has not been completed yet");
+    require(rewardTokenBalance() != 0, "The rewards are all sent");
+
+    rewardToken.transferFrom(address(this), address(owner()), rewardTokenBalance());
   }
 
   function _generateWinners () internal {
     require(userList.length > 0, "There must be more than zero players");
-    uint256 winnerNumber = getRandomNumber(0, userList.length - 1);
-    winners[0] = Winner(userList[winnerNumber], rewardTokenBalance());
-    winnersCount = 1;
+    uint[] memory arr = _createArray(userList.length);
+    uint rand = getRandomNumber(0, userList.length - 1);
+    uint[] memory winnerArr = _shuffle(arr, rand);
+
+    uint arrCount = 0;
+
+    for (uint i = 0; i < winnerProportions.length; i++) {
+        for (uint j = 0; j < winnerProportions[i].userCount; j++) {
+           if (arrCount == winnerArr.length) {
+            winnersCount = arrCount;
+            break;
+          }
+          uint winnerReward = winnerProportions[i].rewardPercent.mul(rewardTokenBalance()).div(100);
+          winners[i] = Winner(userList[winnerArr[i]], winnerReward);
+          arrCount++;
+        }
+      }
+
+      winnersCount = arrCount;
   }
 
-  function getRandomNumber (uint256 _startingValue, uint256 _endingValue) internal view returns(uint256) {
-    uint256 amountBlockAgo = endTime.sub(block.timestamp).div(3);
-    uint256 safeAmountBLockAgo = amountBlockAgo % 254;
-    uint256 randomInt = uint256(keccak256(abi.encodePacked(blockhash(block.number.sub(safeAmountBLockAgo + 1)))));
-    uint256 range = _endingValue - _startingValue + 1;
+  function getRandomNumber (uint _startingValue, uint _endingValue) internal view returns(uint) {
+    uint amountBlockAgo = endTime.sub(block.timestamp).div(3);
+    uint safeAmountBLockAgo = amountBlockAgo % 254;
+    uint randomInt = uint(keccak256(abi.encodePacked(blockhash(block.number.sub(safeAmountBLockAgo + 1)))));
+    uint range = _endingValue - _startingValue + 1;
 
     randomInt = randomInt % range;
     randomInt += _startingValue;
 
     return randomInt;
+  }
+
+  function _shuffle (uint[] memory numberArr, uint randomNumber) internal pure returns (uint[] memory) {
+    for (uint i = 0; i < numberArr.length; i++) {
+        uint n = i + uint(keccak256(abi.encodePacked(randomNumber))) % (numberArr.length - i);
+        uint temp = numberArr[n];
+        numberArr[n] = numberArr[i];
+        numberArr[i] = temp;
+    }
+
+    return numberArr;
+  }
+
+  function _createArray (uint arrayLength) internal pure returns(uint[] memory) {
+    uint[] memory arr = new uint[](arrayLength);
+
+    for (uint i = 0; i < arrayLength; i++) {
+      arr[i] = i;
+    }
+
+    return arr;
   }
 }
