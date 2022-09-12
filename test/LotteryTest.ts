@@ -9,12 +9,22 @@ describe("Lottery contract", function () {
     const lotteryEndTime = Math.floor(Date.now() / 1000) + lotteryDuration
     
     const [owner, ...addresses] = await ethers.getSigners()
-    const ERC20 = await ethers.getContractFactory("Ticket")
-    const Ticket = await ERC20.deploy('Ticket', 'TCT', 10000000000)
-    const RewardToken = await ERC20.deploy('Tether', 'USDT', 10000000000)
+    
+    const TicketContract = await ethers.getContractFactory("Ticket")
+    const Ticket = await TicketContract.deploy('Ticket', 'TCT', 10000000000)
+
+    const USDTToken = await ethers.getContractFactory("USDT")
+    const RewardToken = await USDTToken.deploy()
       
     const lotteryContract = await ethers.getContractFactory("Lottery")
     const Lottery = await lotteryContract.deploy(Ticket.address , RewardToken.address, lotteryEndTime)
+
+    for (let i = 0; i < 40; i++) {
+      let wallet = ethers.Wallet.createRandom()
+      wallet = wallet.connect(ethers.provider)
+      await owner.sendTransaction({to: wallet.address, value: ethers.utils.parseEther("1")});
+      addresses.push(wallet)
+    }    
 
     return {
       owner, addresses, Ticket, RewardToken, Lottery
@@ -43,37 +53,32 @@ describe("Lottery contract", function () {
   })
 
   it("Завершение лотереи работает корректно", async function () {
-    const { Ticket, RewardToken, Lottery, owner, addresses } = await loadFixture(deployTokenFixture)
+    const lotteryReward = 120
+    const userCount = 50
 
-    // Owner отправляет тикеты на адрес пользователя. Ожидается: баланс поменялся
-    await expect(Ticket.transfer(addresses[1].address, 20)).to.changeTokenBalances(Ticket, [owner, addresses[1]], [-20, 20])
-    await expect(Ticket.transfer(addresses[2].address, 20)).to.changeTokenBalances(Ticket, [owner, addresses[2]], [-20, 20])
+    const { Ticket, RewardToken, Lottery, owner, addresses } = await loadFixture(deployTokenFixture)
+    
+    for (let i = 1; i < userCount + 1; i++) {
+      
+       // Owner отправляет тикеты на адрес пользователя. Ожидается: баланс поменялся
+      await expect(Ticket.transfer(addresses[i].address, 20)).to.changeTokenBalances(Ticket, [owner, addresses[i]], [-20, 20])
+
+      // Пользователи дают разрешение контракту лотереи на трату тикетов
+      await Ticket.connect(addresses[i]).approve(Lottery.address, 20)
+
+         // Ожидается: дано разрешение на трату тикетов контрактом лотереи у пользователей
+      await expect(await Ticket.connect(addresses[i]).allowance(addresses[i].address, Lottery.address)).to.equal(20)
+
+         // Пользователь переводит нажимает "Учавствовать лотерею"
+      await Lottery.connect(addresses[i]).playTheLottery(20)
+
+      // Ожидается: У пользователя все его тикеты
+      await expect(await Lottery.userTickets(addresses[i].address)).to.equal(20)
+    }
+
 
      // Owner отправляет USDT на контракт лотереи. Ожидается: баланс поменялся
-    await expect(RewardToken.transfer(Lottery.address, 100)).to.changeTokenBalances(RewardToken, [owner, Lottery.address], [-100, 100])
-
-    // Пользователи дают разрешение контракту лотереи на трату тикетов
-    await Ticket.connect(addresses[1]).approve(Lottery.address, 20)
-    await Ticket.connect(addresses[2]).approve(Lottery.address, 20)
-    
-    // Ожидается: дано разрешение на трату тикетов контрактом лотереи у пользователей
-    await expect(await Ticket.connect(addresses[1]).allowance(addresses[1].address, Lottery.address)).to.equal(20)
-    await expect(await Ticket.connect(addresses[2]).allowance(addresses[1].address, Lottery.address)).to.equal(20)
-
-    // Пользователь 1 переводит нажимает "Учавствовать лотерею"
-    await Lottery.connect(addresses[1]).playTheLottery(5)
-    await Lottery.connect(addresses[1]).playTheLottery(5)
-    await Lottery.connect(addresses[1]).playTheLottery(5)
-    await Lottery.connect(addresses[1]).playTheLottery(5)
-
-    await Lottery.connect(addresses[2]).playTheLottery(5)
-
-    // Ожидается: У пользователя 1 все его тикеты
-    await expect(await Lottery.userTickets(addresses[1].address)).to.equal(20)
-    await expect(await Lottery.userTickets(addresses[2].address)).to.equal(5)
-
-    // Ожидается: Пользователь 1 записан в массив пользователей
-    await expect(await Lottery.userList(0)).to.equal(addresses[1].address)
+    await expect(RewardToken.transfer(Lottery.address, lotteryReward)).to.changeTokenBalances(RewardToken, [owner, Lottery.address], [-lotteryReward, lotteryReward])
     
     const endTime = await Lottery.endTime()
     
@@ -87,20 +92,22 @@ describe("Lottery contract", function () {
     const usersCount = +await Lottery.usersCount()
     
     const winnerCount = +await Lottery.winnersCount()
-    // Ожидается: победителей либо 35 штук, либо все пользователи
-    await expect(winnerCount).to.be.oneOf([usersCount, 35]);
+    // Ожидается: победителей либо 39 штук, либо все пользователи
+    await expect(winnerCount).to.be.oneOf([usersCount, 39]);
 
-    const winner0 = await Lottery.winners(0)
-    const winner1 = await Lottery.winners(1)
- 
 
-    expect(winner0.amount).to.equal(50)
-    expect(winner1.amount).to.equal(5)
+    for (let i = 0; i < userCount; i++) {
+      const winner = await Lottery.winners(i)
+      console.log(`Победитель ${i}: `, winner.userAddress, +winner.amount)
+      
+      // expect(winner.amount).to.equal(50)
 
-    // Ожидается: USDT отправлены победителю
-    await expect(await RewardToken.balanceOf(winner0.userAddress)).to.equal(50)
-    await expect(await RewardToken.balanceOf(winner1.userAddress)).to.equal(5)
+      // // Ожидается: USDT отправлены победителю
+      // await expect(await RewardToken.balanceOf(winner.userAddress)).to.equal(50)
+    }
 
-    await expect(await Lottery.getUnusedRewards()).to.changeTokenBalances(RewardToken, [Lottery.address, owner], [-45, 45])
+    // console.log('Неиспользуемые награды: ', +await Lottery.rewardTokenBalance());
+
+    // await expect(await Lottery.getUnusedRewards()).to.changeTokenBalances(RewardToken, [Lottery.address, owner], [-45, 45])
   })
 })

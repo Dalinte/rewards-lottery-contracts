@@ -39,6 +39,7 @@ contract Lottery is Ownable {
   }
 
   WinnerProportions[] internal winnerProportions;
+  uint maxWinnerCount = 39;
 
   event TicketSent(address ticketSender, uint amount, uint timestamp);
   event LotteryCompleted();
@@ -106,17 +107,16 @@ contract Lottery is Ownable {
     uint[] memory arr = _createArray(userList.length);
     uint rand = getRandomNumber(0, userList.length - 1);
     uint[] memory winnerArr = _shuffle(arr, rand);
-
     uint arrCount = 0;
 
     for (uint i = 0; i < winnerProportions.length; i++) {
         for (uint j = 0; j < winnerProportions[i].userCount; j++) {
-           if (arrCount == winnerArr.length) {
-            winnersCount = arrCount;
+           if (arrCount == winnerArr.length || arrCount == maxWinnerCount) {
             break;
           }
           uint winnerReward = winnerProportions[i].rewardPercent.mul(rewardTokenBalance()).div(100);
-          winners[i] = Winner(userList[winnerArr[i]], winnerReward);
+          address winnerAddress = userList[winnerArr[arrCount]];
+          winners[arrCount] = Winner(winnerAddress, winnerReward);
           arrCount++;
         }
       }
