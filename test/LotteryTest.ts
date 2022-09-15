@@ -19,7 +19,7 @@ describe("Lottery contract", function () {
     const lotteryContract = await ethers.getContractFactory("Lottery")
     const Lottery = await lotteryContract.deploy(Ticket.address , RewardToken.address, lotteryEndTime)
 
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 50; i++) {
       let wallet = ethers.Wallet.createRandom()
       wallet = wallet.connect(ethers.provider)
       await owner.sendTransaction({to: wallet.address, value: ethers.utils.parseEther("1")});
@@ -55,7 +55,7 @@ describe("Lottery contract", function () {
 
   it("Завершение лотереи работает корректно", async function () {
     const lotteryReward = 120
-    const userCount = 100
+    const userCount = 50
 
     const { Ticket, RewardToken, Lottery, owner, addresses } = await loadFixture(deployTokenFixture)
     
@@ -93,6 +93,7 @@ describe("Lottery contract", function () {
     await Lottery.completeLottery()
     let end = Date.now();
     console.log('Лотерея завершена за миллисекунд: ', end - start);
+    
 
     // Ожидается: Статус лотереи изменился на "Завершено"
     await expect(await Lottery.lotteryStatus()).to.equal(1)
