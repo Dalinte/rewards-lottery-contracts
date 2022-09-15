@@ -19,13 +19,14 @@ describe("Lottery contract", function () {
     const lotteryContract = await ethers.getContractFactory("Lottery")
     const Lottery = await lotteryContract.deploy(Ticket.address , RewardToken.address, lotteryEndTime)
 
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 100; i++) {
       let wallet = ethers.Wallet.createRandom()
       wallet = wallet.connect(ethers.provider)
       await owner.sendTransaction({to: wallet.address, value: ethers.utils.parseEther("1")});
       addresses.push(wallet)
-    }    
-
+    }
+    console.log('end create wallets');
+    
     return {
       owner, addresses, Ticket, RewardToken, Lottery
     }
@@ -45,16 +46,16 @@ describe("Lottery contract", function () {
   //   expect(await Lottery.getRandomNumber(100, 1000)).to.be.within(100, 1000)
   // })
 
-  it("Баланс токена-тикета при деплое весь у владельца контракта", async function () {
-    const { Ticket, owner } = await loadFixture(deployTokenFixture);
+  // it("Баланс токена-тикета при деплое весь у владельца контракта", async function () {
+  //   const { Ticket, owner } = await loadFixture(deployTokenFixture);
 
-    const ownerBalance = await Ticket.balanceOf(owner.address)
-    expect(await Ticket.totalSupply()).to.equal(ownerBalance)
-  })
+  //   const ownerBalance = await Ticket.balanceOf(owner.address)
+  //   expect(await Ticket.totalSupply()).to.equal(ownerBalance)
+  // })
 
   it("Завершение лотереи работает корректно", async function () {
     const lotteryReward = 120
-    const userCount = 50
+    const userCount = 100
 
     const { Ticket, RewardToken, Lottery, owner, addresses } = await loadFixture(deployTokenFixture)
     
@@ -69,11 +70,12 @@ describe("Lottery contract", function () {
          // Ожидается: дано разрешение на трату тикетов контрактом лотереи у пользователей
       await expect(await Ticket.connect(addresses[i]).allowance(addresses[i].address, Lottery.address)).to.equal(20)
 
-         // Пользователь переводит нажимает "Учавствовать лотерею"
-      await Lottery.connect(addresses[i]).playTheLottery(20)
+      const rand = Math.floor(10)
+      // Пользователь переводит нажимает "Учавствовать лотерею"
+      await Lottery.connect(addresses[i]).playTheLottery(rand)
 
       // Ожидается: У пользователя все его тикеты
-      await expect(await Lottery.userTickets(addresses[i].address)).to.equal(20)
+      await expect(await Lottery.userTickets(addresses[i].address)).to.equal(rand)
     }
 
 
@@ -85,7 +87,12 @@ describe("Lottery contract", function () {
     // Майнинг 256 блоков, чтобы функция генерации рандомного числа работала корректно в тестовой сети
     await network.provider.send("hardhat_mine", ["0x100"])
     await network.provider.send("evm_setNextBlockTimestamp", [+endTime])
+
+    let start = Date.now();
+    console.log('Завершение лотереи...');
     await Lottery.completeLottery()
+    let end = Date.now();
+    console.log('Лотерея завершена за миллисекунд: ', end - start);
 
     // Ожидается: Статус лотереи изменился на "Завершено"
     await expect(await Lottery.lotteryStatus()).to.equal(1)
@@ -96,14 +103,12 @@ describe("Lottery contract", function () {
     await expect(winnerCount).to.be.oneOf([usersCount, 39]);
 
 
-    for (let i = 0; i < userCount; i++) {
+    for (let i = 0; i < Math.min(userCount, 39); i++) {
       const winner = await Lottery.winners(i)
       console.log(`Победитель ${i}: `, winner.userAddress, +winner.amount)
-      
-      // expect(winner.amount).to.equal(50)
 
-      // // Ожидается: USDT отправлены победителю
-      // await expect(await RewardToken.balanceOf(winner.userAddress)).to.equal(50)
+      // Ожидается: USDT отправлены победителю
+      // await expect(await RewardToken.balanceOf(winner.userAddress)).to.equal(+winner.amount)
     }
 
     // console.log('Неиспользуемые награды: ', +await Lottery.rewardTokenBalance());

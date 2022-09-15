@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "hardhat/console.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 
 contract Lottery is Ownable {
   using SafeMath for uint;
@@ -23,7 +24,7 @@ contract Lottery is Ownable {
   LotteryStatuses public lotteryStatus = LotteryStatuses.inProgress;
 
   mapping (address => uint) public userTickets;
-  address[] public userList;
+  address[] private userList;
 
   struct Winner {
     address userAddress;
@@ -38,10 +39,17 @@ contract Lottery is Ownable {
     uint userCount;
   }
 
-  WinnerProportions[] internal winnerProportions;
+  WinnerProportions[] private winnerProportions;
   uint maxWinnerCount = 39;
 
-  event TicketSent(address ticketSender, uint amount, uint timestamp);
+  struct TicketDistributionStruct {
+    address playerAddress;
+    uint256 startIndex;
+    uint256 endIndex;
+  }
+  TicketDistributionStruct[] private ticketDistribution;
+
+  event PlayTheLottery(address ticketSender, uint amount, uint timestamp);
   event LotteryCompleted();
 
   constructor (address _ticketAddress, address _rewardTokenAddress, uint _endTime) Ownable() {
@@ -59,6 +67,7 @@ contract Lottery is Ownable {
     require(endTime <= block.timestamp, "The time is not up yet");
     require(lotteryStatus != LotteryStatuses.completed, "Lottery already complete");
 
+    _playerTicketDistribution();
     _generateWinners();
     rewardToken.approve(address(this), rewardTokenBalance());
     _sendRewardsToWinners();
@@ -76,9 +85,9 @@ contract Lottery is Ownable {
     ticketToken.transferFrom(_msgSender(), address(this), _amount);
     if (userTickets[_msgSender()] == 0) userList.push(_msgSender());
     userTickets[_msgSender()] +=  _amount;
-    totalTicket = _amount;
+    totalTicket += _amount;
 
-    emit TicketSent(_msgSender(), _amount, block.timestamp);
+    emit PlayTheLottery(_msgSender(), _amount, block.timestamp);
   }
 
   function _sendRewardsToWinners () internal {
@@ -104,24 +113,24 @@ contract Lottery is Ownable {
 
   function _generateWinners () internal {
     require(userList.length > 0, "There must be more than zero players");
-    uint[] memory arr = _createArray(userList.length);
-    uint rand = getRandomNumber(0, userList.length - 1);
+    uint[] memory arr = _createArray(totalTicket);
+    uint rand = getRandomNumber(0, totalTicket - 1);
     uint[] memory winnerArr = _shuffle(arr, rand);
-    uint arrCount = 0;
+    uint winnerIndex = 0;
 
     for (uint i = 0; i < winnerProportions.length; i++) {
-        for (uint j = 0; j < winnerProportions[i].userCount; j++) {
-           if (arrCount == winnerArr.length || arrCount == maxWinnerCount) {
-            break;
-          }
-          uint winnerReward = winnerProportions[i].rewardPercent.mul(rewardTokenBalance()).div(100);
-          address winnerAddress = userList[winnerArr[arrCount]];
-          winners[arrCount] = Winner(winnerAddress, winnerReward);
-          arrCount++;
+      for (uint j = 0; j < winnerProportions[i].userCount; j++) {
+        if (winnerIndex == userList.length || winnerIndex == maxWinnerCount) {
+          break;
         }
+        uint winnerReward = winnerProportions[i].rewardPercent.mul(rewardTokenBalance()).div(100);
+        address winnerAddress = findWinningAddress(winnerArr[winnerIndex]);
+        winners[winnerIndex] = Winner(winnerAddress, winnerReward);
+        winnerIndex++;
       }
+    }
 
-      winnersCount = arrCount;
+    winnersCount = winnerIndex;
   }
 
   function getRandomNumber (uint _startingValue, uint _endingValue) internal view returns(uint) {
@@ -137,8 +146,10 @@ contract Lottery is Ownable {
   }
 
   function _shuffle (uint[] memory numberArr, uint randomNumber) internal pure returns (uint[] memory) {
-    for (uint i = 0; i < numberArr.length; i++) {
-        uint n = i + uint(keccak256(abi.encodePacked(randomNumber))) % (numberArr.length - i);
+    uint arrLength = numberArr.length;
+
+    for (uint i = 0; i < arrLength; i++) {
+        uint n = i + uint256(keccak256(abi.encodePacked(randomNumber))) % (arrLength - i);
         uint temp = numberArr[n];
         numberArr[n] = numberArr[i];
         numberArr[i] = temp;
@@ -147,7 +158,30 @@ contract Lottery is Ownable {
     return numberArr;
   }
 
-  function _createArray (uint arrayLength) internal pure returns(uint[] memory) {
+  function _playerTicketDistribution () private {
+    uint256 _ticketIndex = 0;
+
+    for (uint256 i = _ticketIndex; i < userList.length; i++) {
+      uint _ticketDistributionLength = ticketDistribution.length;
+      address _playerAddress = userList[i];
+      uint _numTickets = userTickets[_playerAddress];
+
+      TicketDistributionStruct memory newDistribution = TicketDistributionStruct({
+        playerAddress: _playerAddress,
+        startIndex: _ticketIndex,
+        endIndex: _ticketIndex + _numTickets - 1
+      });
+
+      if (_ticketDistributionLength > i) {
+        ticketDistribution[i] = newDistribution;
+      } else {
+        ticketDistribution.push(newDistribution);
+      }
+      _ticketIndex = _ticketIndex + _numTickets;
+    }
+  }
+
+  function _createArray (uint arrayLength) private pure returns(uint[] memory) {
     uint[] memory arr = new uint[](arrayLength);
 
     for (uint i = 0; i < arrayLength; i++) {
@@ -156,4 +190,33 @@ contract Lottery is Ownable {
 
     return arr;
   }
+
+  function findWinningAddress(uint256 _winningTicketIndex) private view returns(address) {
+    uint _winningPlayerIndex = findUpperBound(_winningTicketIndex);
+    return ticketDistribution[_winningPlayerIndex].playerAddress;
+  }
+
+  function findUpperBound(uint _winningTicketIndex) private view returns (uint) {
+        if (userList.length == 0) {
+            return 0;
+        }
+
+        uint low = 0;
+        uint high = userList.length;
+        while (low < high) {
+            uint256 mid = Math.average(low, high);
+
+            if (ticketDistribution[mid].startIndex > _winningTicketIndex) {
+                high = mid;
+            } else {
+                low = mid + 1;
+            }
+        }
+
+        if (low > 0 && ticketDistribution[low - 1].startIndex <= _winningTicketIndex && ticketDistribution[low - 1].endIndex >= _winningTicketIndex) {
+            return low - 1;
+        } else {
+            return low;
+        }
+    }
 }
