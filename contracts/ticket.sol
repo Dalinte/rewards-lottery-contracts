@@ -6,8 +6,8 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract Ticket is ERC20, Ownable  {
-    constructor(string memory _name, string memory _symbol, uint256 _initSupple) ERC20(_name, _symbol) Ownable() {
-        _mint(msg.sender, _initSupple);
+    constructor() ERC20('Ticket', 'TCT') Ownable() {
+        _mint(msg.sender, 1000000000000000);
     }
 
      function decimals() public view virtual override returns (uint8) {

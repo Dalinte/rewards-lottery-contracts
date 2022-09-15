@@ -17,6 +17,8 @@ describe("Lottery contract", function () {
     const RewardToken = await USDTToken.deploy()
       
     const lotteryContract = await ethers.getContractFactory("Lottery")
+    console.log(Ticket.address);
+    
     const Lottery = await lotteryContract.deploy(Ticket.address , RewardToken.address, lotteryEndTime)
 
     for (let i = 0; i < 50; i++) {

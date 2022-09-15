@@ -52,11 +52,10 @@ contract Lottery is Ownable {
   event PlayTheLottery(address ticketSender, uint amount, uint timestamp);
   event LotteryCompleted();
 
-  constructor (address _ticketAddress, address _rewardTokenAddress, uint _endTime) Ownable() {
-    require(_endTime > block.timestamp, "Timestamp in the past");
-    ticketToken = IERC20(_ticketAddress);
-    rewardToken = IERC20(_rewardTokenAddress);
-    endTime = _endTime;
+  constructor () Ownable() {
+    ticketToken = IERC20(0x5FbDB2315678afecb367f032d93F642f64180aa3); // Вставить адрес тикета в hex формате (по доке: https://github.com/tronprotocol/documentation/blob/master/TRX/Tron-overview.md#62-mainnet-addresses-begin-with-41)
+    rewardToken = IERC20(0x5FbDB2315678afecb367f032d93F642f64180aa3); // Вставить адрес USDT в hex формате
+    endTime = 1000000000; // Вставить timestamp завершения лотереи https://www.unixtimestamp.com/
 
     winnerProportions.push(WinnerProportions(50, 1));
     winnerProportions.push(WinnerProportions(5, 3));
