@@ -31,6 +31,7 @@ contract Lottery is Ownable {
     uint amount;
   }
 
+  /// @dev lottery winners. You can iterate through the winners by winnersCount
   mapping (uint => Winner) public winners;
   uint public winnersCount = 0;
 
@@ -39,6 +40,7 @@ contract Lottery is Ownable {
     uint userCount;
   }
 
+  /// @dev proportions of token distribution at the end of the lottery
   WinnerProportions[] private winnerProportions;
   uint maxWinnerCount = 39;
 
@@ -47,11 +49,16 @@ contract Lottery is Ownable {
     uint256 startIndex;
     uint256 endIndex;
   }
+  /// @dev proportions of token distribution at the end of the lottery
   TicketDistributionStruct[] private ticketDistribution;
 
   event PlayTheLottery(address ticketSender, uint amount, uint timestamp);
   event LotteryCompleted();
 
+  /// @dev proportions of token distribution at the end of the lottery
+  /// @param _ticketAddress - address ERC20 token. For example your personal ticket contract
+  /// @param _rewardTokenAddress - address ERC20 token. For example USDT
+  /// @param _endTime - timestamp in future. You can use https://www.unixtimestamp.com/
   constructor (address _ticketAddress, address _rewardTokenAddress, uint _endTime) Ownable() {
     require(_endTime > block.timestamp, "Timestamp in the past");
     ticketToken = IERC20(_ticketAddress);
@@ -63,6 +70,9 @@ contract Lottery is Ownable {
     winnerProportions.push(WinnerProportions(1, 35));
   }
 
+  /// @dev The function completes the lottery.
+  /// You can't finish ahead of time
+  /// The function generates winners and sends them the winnings
   function completeLottery () external onlyOwner {
     require(endTime <= block.timestamp, "The time is not up yet");
     require(lotteryStatus != LotteryStatuses.completed, "Lottery already complete");
@@ -77,6 +87,9 @@ contract Lottery is Ownable {
     emit LotteryCompleted();
   }
 
+  /// @dev The function adds the user to the list of lottery players
+  /// You cannot call the function after the lottery ends
+  /// @param _amount - number of token tickets to participate in the lottery
   function playTheLottery (uint _amount) public {
     require(endTime > block.timestamp, "Time's up");
     require(_amount > 0, "You need to send more than 0 ticket");
@@ -90,20 +103,25 @@ contract Lottery is Ownable {
     emit PlayTheLottery(_msgSender(), _amount, block.timestamp);
   }
 
+  /// @dev The function sends the winnings to the list of winners
   function _sendRewardsToWinners () internal {
     for (uint i = 0; i < winnersCount; i++) {
       rewardToken.transferFrom(address(this), winners[i].userAddress, winners[i].amount);
     }
   }
 
+  /// @dev view the balance of tokens to win
   function rewardTokenBalance () public view returns(uint) {
     return rewardToken.balanceOf(address(this));
   }
 
-   function usersCount () public view returns(uint) {
+  /// @dev View the number of unique users
+  function usersCount () public view returns(uint) {
     return userList.length;
   }
 
+  /// @dev When the winnings are distributed, the values are rounded down. After the lottery is completed, the administrator can pick up the insignificant remnants of tokens
+  /// Cannot be called before the lottery is over
   function getUnusedRewards () public onlyOwner {
     require(lotteryStatus == LotteryStatuses.completed, "The lottery has not been completed yet");
     require(rewardTokenBalance() != 0, "The rewards are all sent");
@@ -111,7 +129,8 @@ contract Lottery is Ownable {
     rewardToken.transferFrom(address(this), address(owner()), rewardTokenBalance());
   }
 
-  function _generateWinners () internal {
+  /// @dev Generation of winners by random number, taking into account the number of ticketsView the number of unique users
+  function _generateWinners () private {
     require(userList.length > 0, "There must be more than zero players");
     uint[] memory arr = _createArray(totalTicket);
     uint rand = getRandomNumber(0, totalTicket - 1);
@@ -133,6 +152,8 @@ contract Lottery is Ownable {
     winnersCount = winnerIndex;
   }
 
+  /// @dev generates a random number that is calculated based on the hash of the block that was at the end of the lottery, i.e. it cannot be predicted.
+  /// Since there is access only to the last 256 blocks, it is better to complete the lottery in a short time after the end of time
   function getRandomNumber (uint _startingValue, uint _endingValue) internal view returns(uint) {
     uint amountBlockAgo = endTime.sub(block.timestamp).div(3);
     uint safeAmountBLockAgo = amountBlockAgo % 254;
@@ -145,6 +166,7 @@ contract Lottery is Ownable {
     return randomInt;
   }
 
+  /// @dev shuffle an array based on a random number
   function _shuffle (uint[] memory numberArr, uint randomNumber) internal pure returns (uint[] memory) {
     uint arrLength = numberArr.length;
 
@@ -158,6 +180,7 @@ contract Lottery is Ownable {
     return numberArr;
   }
 
+  /// @dev create a distribution of ticket indexes depending on their number. The more tickets a user has, the more weight he has
   function _playerTicketDistribution () private {
     uint256 _ticketIndex = 0;
 
@@ -181,6 +204,7 @@ contract Lottery is Ownable {
     }
   }
 
+  /// @dev Create an array of the specified length
   function _createArray (uint arrayLength) private pure returns(uint[] memory) {
     uint[] memory arr = new uint[](arrayLength);
 
@@ -191,11 +215,13 @@ contract Lottery is Ownable {
     return arr;
   }
 
+  /// @dev find the winner's address in ticketDistribution using binary search
   function findWinningAddress(uint256 _winningTicketIndex) private view returns(address) {
     uint _winningPlayerIndex = findUpperBound(_winningTicketIndex);
     return ticketDistribution[_winningPlayerIndex].playerAddress;
   }
 
+  /// @dev binary search in ticketDistribution
   function findUpperBound(uint _winningTicketIndex) private view returns (uint) {
         if (userList.length == 0) {
             return 0;

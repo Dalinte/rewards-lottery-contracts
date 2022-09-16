@@ -6,10 +6,12 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract Ticket is ERC20, Ownable  {
+    /// @dev the entire issue is distributed to the owner
     constructor(string memory _name, string memory _symbol, uint256 _initSupple) ERC20(_name, _symbol) Ownable() {
         _mint(msg.sender, _initSupple);
     }
 
+    /// @dev indivisible tokens
      function decimals() public view virtual override returns (uint8) {
         return 0;
     }
